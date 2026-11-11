@@ -6,6 +6,7 @@ An OpenCode-style look for the Claude Code terminal transcript, as a Claude Code
 - Tool calls, their results and errors get blocks of their own, with a quieter bar.
 - Claude's replies are drawn without a bullet, on a background band of their own.
 - Shell commands in a reply are framed, so they stand apart from the prose. Each frame has a `[copy]` button on the right end of its top border: a click copies the whole command and the label reads `copied` for a moment (a failed copy shows a toast with the reason).
+- Markdown tables in a reply fit the band: each column takes a share of its width and wraps inside its cell, in a round frame with a bold header and striped rows.
 - Each turn closes with a footer: `▣ Claude · <model> · <duration>`.
 
 - In fullscreen, a status panel of cards docks beside the transcript: the project's directory, git branch and uncommitted changes with your status line script's output, one row per part; how full the context window is; each turn's tokens; your subscription's 5-hour and weekly windows; then the session's board and summary.
