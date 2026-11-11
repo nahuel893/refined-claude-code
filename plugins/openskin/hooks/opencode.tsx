@@ -1,6 +1,7 @@
 import type { Elements, EngineInterface, On, RenderChildren } from 'claude-code'
 import { drawCommand, ENGINE_GUTTER, type CopyContext, type Segment } from './commands'
 import type { Tracker } from './scrollbar'
+import { drawTable, splitTables } from './tables'
 import { paint, type Theme } from './theme'
 
 /** The origins of a user row that are the person's own prompt: typed, sent from a phone, or a host app's. */
@@ -104,12 +105,16 @@ export function drawReply(
       paddingY={1}
       gap={1}
     >
-      {segments.map((segment, i) =>
-        segment.kind === 'prose' ? (
-          <ui.Markdown key={`prose:${i}`} text={segment.text} />
-        ) : (
-          drawCommand(ui, $, theme, segment, `command:${i}`, copy)
-        ),
+      {segments.flatMap((segment, i) =>
+        segment.kind === 'prose'
+          ? splitTables(segment.text).map((piece, j) =>
+              piece.kind === 'text' ? (
+                <ui.Markdown key={`prose:${i}:${j}`} text={piece.text} />
+              ) : (
+                drawTable(ui, theme, piece.table, `table:${i}:${j}`)
+              ),
+            )
+          : [drawCommand(ui, $, theme, segment, `command:${i}`, copy)],
       )}
     </ui.Box>
   )
