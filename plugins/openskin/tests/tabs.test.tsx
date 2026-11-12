@@ -18,6 +18,23 @@ test('the panel opens on a tab bar of three plain Buttons, Panel shown, each wit
   await ui.unmount()
 })
 
+test('the tab bar starts with a square, empty while the panel lacks the keys and filled once it holds them', async ($, on) => {
+  const { clock } = world(on)
+  await startSession($, clock)
+
+  const idle = await $.ui.mount(pane(30, false))
+  const idleTexts = (await idle.findAll({ type: 'Text' })).map(text => text.text ?? '')
+  expect(idleTexts).toContain('□')
+  expect(idleTexts).not.toContain('■')
+  await idle.unmount()
+
+  const focused = await $.ui.mount(pane(30, true))
+  const focusedTexts = (await focused.findAll({ type: 'Text' })).map(text => text.text ?? '')
+  expect(focusedTexts).toContain('■')
+  expect(focusedTexts).not.toContain('□')
+  await focused.unmount()
+})
+
 test('the Panel tab keeps the Status card and the board, and no longer holds the summary', async ($, on) => {
   const { clock, write } = world(on)
   write(BOARD, '○ Add tests\n')

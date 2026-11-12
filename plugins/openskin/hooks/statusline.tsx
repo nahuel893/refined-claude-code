@@ -463,7 +463,11 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
       <Box flexDirection="row" {...fill}>
         {bar}
         <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-          {drawTabBar({ Box, Button }, $, tab, onShow)}
+          {drawTabBar({ Box, Button, Text }, $, tab, onShow, {
+            isFocused: e.props.isFocused,
+            color: theme.accent,
+            idleColor: theme.muted,
+          })}
           {body}
         </Box>
       </Box>

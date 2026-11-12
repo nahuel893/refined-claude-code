@@ -33,15 +33,26 @@ export async function showTab($: EngineInterface, tab: PanelTab): Promise<void> 
   await update($, shown, () => tab)
 }
 
-export type TabBarUi = Pick<Elements['terminal'], 'Box' | 'Button'>
+export type TabBarUi = Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>
+
+/** Where the panel stands with the keyboard: filled while it holds the keys, so its letters work. */
+export type FocusMark = { isFocused: boolean; color: string; idleColor: string }
 
 /**
- * The tab bar: one plain Button per tab (`p: Panel`), the shown one at full strength, the rest dim.
- * `onShow` runs once a pressed tab is shown.
+ * The tab bar: a focus square (`■` while the panel holds the keys, `□` otherwise), then one plain
+ * Button per tab (`p: Panel`), the shown one at full strength, the rest dim. `onShow` runs once a
+ * pressed tab is shown.
  */
-export function drawTabBar({ Box, Button }: TabBarUi, $: EngineInterface, current: PanelTab, onShow: (tab: PanelTab) => Promise<void>) {
+export function drawTabBar(
+  { Box, Button, Text }: TabBarUi,
+  $: EngineInterface,
+  current: PanelTab,
+  onShow: (tab: PanelTab) => Promise<void>,
+  focus: FocusMark,
+) {
   return (
     <Box flexDirection="row" gap={2} paddingX={1}>
+      <Text color={focus.isFocused ? focus.color : focus.idleColor}>{focus.isFocused ? '■' : '□'}</Text>
       {TABS.map(tab => (
         <Button
           key={`tab:${tab.id}`}
