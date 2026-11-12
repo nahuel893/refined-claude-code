@@ -22,8 +22,8 @@ Branch: `feat/panel-tabs`. Delivery: `exception-ok` (repo policy merges the bran
 |----|-------|-------|--------|--------|
 | T1 | S1, S2, S3 | delegated (context backstop) | done | 07510d0 |
 | T2 | S4, S6 | delegated (context backstop) | done | 9d90f80 |
-| T3 | S5 | delegated (context backstop) | done | this commit (`feat(openskin): refresh the Git tab while it is shown`) |
-| T4 | S1-S5 docs (README, CLAUDE.md) | delegated (context backstop) | pending | |
+| T3 | S5 | delegated (context backstop) | done | fe4d41e |
+| T4 | S1-S5 docs (README, CLAUDE.md) | delegated (context backstop) | done | this commit (`docs(openskin): document the panel tabs and bump to 0.11.0`) |
 
 - T1: tab atom + tab bar, Panel tab (existing cards), Summary tab, hotkeys, `/panel <tab>`.
 - T2: git data (status porcelain v2 with `branch.ab`, numstat, `for-each-ref` branches, `worktree list --porcelain`, `log -5`) and the Git tab render with file selection and diff.
@@ -43,3 +43,4 @@ Branch: `feat/panel-tabs`. Delivery: `exception-ok` (repo policy merges the bran
 - L9 (T1): tab bar (Panel, Git, Summary; hotkeys p, g, s), Summary card moved to the Summary tab, `/panel <tab>` opens with focus after 100 ms. Tests: 9 new in `tests/tabs.test.tsx`, 2 notes tests adapted; `claude plugin test plugins/openskin`: 135 pass, 0 fail; `claude plugin validate plugins/openskin`: passed with the 2 baseline warnings (author, icon). Git tab draws a placeholder until T2.
 - L10 (T2): Git tab (`hooks/git.tsx`): Status (staged, unstaged, untracked with `+/-`; clean tree line), Branches (current with ↑/↓ and upstream, 5 recent, other worktrees), Log (5 commits), picked file's diff cut to the pane's rows. `runGit` and `coalesce` extracted from `hooks/project.tsx` and reused; the Status card's git argv is unchanged. Git is read when the tab is shown and when a file is picked (timer in T3). Tests: 11 new in `tests/git.test.tsx`; `claude plugin test plugins/openskin`: 146 pass, 0 fail; `claude plugin validate plugins/openskin`: passed with the 2 baseline warnings.
 - L11 (T3): a 2.5 s `$.clock.every` polls the Git tab only while it is shown; a `tool.call` hook (with `.catch` passing the call on) polls it after `next(e)` resolves, again only while shown. Polls go through the coalesced `startGitView` poll. The Status card's own pace (input change, every tenth 1.5 s tick) is unchanged. Tests: 5 new in `tests/refresh.test.tsx` (2 regression guards passed at RED, 3 failed); `claude plugin test plugins/openskin`: 151 pass, 0 fail; `claude plugin validate plugins/openskin`: passed with the 2 baseline warnings, `tool.call` listed as a gating hook with `.catch`.
+- L12 (T4): openskin README (Tabs section: Summary, Git cards, refresh, keys), CLAUDE.md openskin description and test count (151), `statusPanel` option description; openskin 0.10.0 -> 0.11.0 in `plugin.json` and `marketplace.json`. `claude plugin test plugins/openskin`: 151 pass, 0 fail; `claude plugin validate plugins/openskin`: passed with the 2 baseline warnings. `tsc -p plugins/openskin` not run: the engine has not laid the types in `.claude-plugin/types/`.

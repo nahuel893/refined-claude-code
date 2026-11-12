@@ -1,6 +1,6 @@
 {
   "name": "openskin",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "An OpenCode-style transcript: prompts, tool calls and errors in barred blocks, Claude's replies on a background band with framed shell commands, and a '▣ Claude · model · duration' footer under each turn. The look and the command frames each have a switch; every color is an option.",
   "userConfig": {
     "opencodeStyle": {
@@ -18,7 +18,7 @@
     "statusPanel": {
       "type": "boolean",
       "title": "Status panel",
-      "description": "In fullscreen, a panel beside the transcript with your status line script's output, one row per part, and the context window fill, each turn's tokens and your subscription usage under it, then the project's board and the session summary when the board and summarize mods have written them. Off leaves the status line to Claude Code.",
+      "description": "In fullscreen, a panel beside the transcript with your status line script's output, one row per part, and the context window fill, each turn's tokens and your subscription usage under it, then the project's board when the board mod has written it. Tabs show a read-only Git view (status, branches, the last commits, a file's diff) and the session summary. Off leaves the status line to Claude Code.",
       "default": true
     },
     "contextWarnAt": {

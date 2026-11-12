@@ -13,8 +13,12 @@ Claude Code mods (function-hooks plugins) published as one marketplace. Public r
 ## Mods
 
 - **openskin**: the OpenCode look for the transcript (barred prompts and tool calls, reply band, framed shell commands with a clickable `[copy]` button in fullscreen, footer), every color an option. It also owns:
-  - the status panel docked beside the transcript in fullscreen. It is built from cards with the title on the border: Status (project, branch, changes), Context (a ten-cell bar in theme colors), Tokens, Usage, Board, Summary. Unicode icons, never emoji: `◔ ⇅ ◷ ≡ ¶`.
-  - `/panel`, which opens the panel below 144 columns.
+  - the status panel docked beside the transcript in fullscreen. A tab bar (`hooks/tabs.tsx`; plain Buttons, hotkeys `p` `g` `s` while the pane has focus) switches three tabs:
+    - Panel: cards with the title on the border: Status (project, branch, changes), Context (a ten-cell bar in theme colors), Tokens, Usage, Board.
+    - Git (`hooks/git.tsx`): read-only Status (staged, unstaged, untracked with `+/-`), Branches (current with ahead/behind, recent branches, worktrees), Log (5 commits), and a picked file's diff cut to the pane's rows. It polls git every 2.5 s and after each `tool.call`, only while shown, through `runGit` and `coalesce` from `hooks/project.tsx`.
+    - Summary: the session summary card.
+    Unicode icons, never emoji: `◔ ⇅ ◷ ≡ ¶ ± ⎇ ◆ Δ`.
+  - `/panel`, which opens the panel below 144 columns; `/panel <tab>` opens it on that tab with focus, 100 ms after the command answers.
   - `/skin`, which offers 11 theme presets and writes the colors through `$.config.set`.
   - `panelBackground`, which paints inside the engine's grey pane frame.
   - a transcript scrollbar: a one-character clickable column on the panel's left edge (track, thumb marking the viewport, a click jumps to the message at that height; the bottom cell returns to the latest). It reads each transcript row's `onScreen` in the row hooks and scrolls with `$.ui.scroll` from the Button's press.
@@ -43,7 +47,7 @@ The panel reuses the user's status line script, which lives outside this repo:
   - `claude plugin test plugins/<mod>`
   - `tsc -p plugins/<mod>`, once the engine has laid the types in `.claude-plugin/types/` (gitignored).
 - Test-first for behavior changes. Observe RED, then GREEN. Regression tests sit next to the code they guard.
-- Last known test counts: openskin 126, command-register 44, board 28, summarize 9.
+- Last known test counts: openskin 151, command-register 44, board 28, summarize 9.
 - Artifacts (code, comments, docs, commit messages) are in English.
 
 ## Commits and publishing

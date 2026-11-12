@@ -8,7 +8,7 @@ An OpenCode-style look for the Claude Code terminal transcript, as a Claude Code
 - Shell commands in a reply are framed, so they stand apart from the prose. Each frame has a `[copy]` button on the right end of its top border: a click copies the whole command and the label reads `copied` for a moment (a failed copy shows a toast with the reason).
 - Each turn closes with a footer: `▣ Claude · <model> · <duration>`.
 
-- In fullscreen, a status panel of cards docks beside the transcript: the project's directory, git branch and uncommitted changes with your status line script's output, one row per part; how full the context window is; each turn's tokens; your subscription's 5-hour and weekly windows; then the session's board and summary.
+- In fullscreen, a status panel of cards docks beside the transcript: the project's directory, git branch and uncommitted changes with your status line script's output, one row per part; how full the context window is; each turn's tokens; your subscription's 5-hour and weekly windows; then the session's board. Tabs switch it to a read-only Git view (status, branches, the last commits, a file's diff) or to the session's summary.
 - `/skin` switches every color at once between ten presets (Tokyo Night, Catppuccin, Gruvbox, Nord, Rose Pine, Kanagawa, Everforest, One Dark and more), and Claude Code's own theme with them.
 
 Every color is an option, and each part (the OpenCode look, the command frames, the status panel) can be switched off on its own.
@@ -41,7 +41,7 @@ Change them with `/plugin configure openskin@refined-claude-code`. A color is a 
 | --- | --- | --- |
 | `opencodeStyle` | `true` | The OpenCode look: prompt, tool and error blocks, the reply band, the turn footer. |
 | `commandFrames` | `true` | Frames the shell commands in Claude's replies and asks Claude to tag them as shell blocks. |
-| `statusPanel` | `true` | The status panel beside the transcript in fullscreen; `/panel` opens it. |
+| `statusPanel` | `true` | The status panel beside the transcript in fullscreen; `/panel` opens it, `/panel git` on a tab. |
 | `contextWarnAt` | `50` | The context fill, in percent, from which the panel's ◔ Context section turns yellow (time to `/compact`). |
 | `contextDangerAt` | `75` | The context fill from which it turns the error color (compact now or start a new session). |
 | `accent` | `#f0a6ec` | The bar beside your prompts and the square in the footer. |
@@ -116,21 +116,33 @@ Edits made outside Claude Code, such as a desktop theme script rewriting `~/.cla
 
 ## Status panel
 
-In the fullscreen layout the panel opens by itself beside the transcript (`/panel` opens it anywhere). Every part of it is a card: a rounded border in the `toolBar` color with the card's title drawn in its top edge, the cards stacked with no blank row between them, labels in the `muted` color and values bold.
+In the fullscreen layout the panel opens by itself beside the transcript (`/panel` opens it anywhere). Its top row is a tab bar: **Panel** (the cards below, shown first), **Git** and **Summary**. Every part of it is a card: a rounded border in the `toolBar` color with the card's title drawn in its top edge, the cards stacked with no blank row between them, labels in the `muted` color and values bold.
 
 ![/panel opening the status panel in a window under 144 columns](../../assets/features/panel.jpg)
 
 - **✿ Status**: always first. The project's directory (your home written as `~`); inside a git work tree, `Branch` and, while there are uncommitted changes, `Changes`: how many files are changed or untracked, then the lines added (green) and deleted (the `error` color) in tracked files since the last commit (untracked files count as files, their lines are not counted). Under them, the rows of `~/.claude/statusline.sh`, each ` | ` separated part on its own row, leaving out the `5h:` and `7d:` parts and the context bar, which the ◷ Usage and ◔ Context cards replace. Git runs again when Claude Code gives the status line new input (after a turn, or in another directory) and otherwise every 15 seconds, so edits made outside the session show up too.
 
-Then each card once it has something to show:
+Then, on the Panel tab, each card once it has something to show:
 
 - **◔ Context**: how full the context window is, as the status line's ten-cell bar (`██████░░░░ 58% (116000/200000)`, the tokens when known): filled cells in the `accent` color, yellow from `contextWarnAt` and the `error` color from `contextDangerAt`, empty cells `muted`. Before the session's first response it is counted once as `/context` does and shown with a `~`.
 - **⇅ Tokens**: the last turn's input (`↑`), output (`↓`) and cache tokens, then the session's running total.
 - **◷ Usage**: the subscription's 5-hour and weekly windows, a bar yellow from 75% and red from 90%, and the time until each resets. Every open session shares the latest reading. Off a subscription there is nothing to show.
 - **≡ Board · 2 of 5**: the session's board from the [board](../board) mod, one row per item, its title counting the done ones. A done item (`✓`) is struck through and dim, a pending one (`○`) plain, and one waiting on your decision (`◇`) has its mark in the accent color. Long items wrap.
-- **¶ Summary**: the session's summary from the [summarize](../summarize) mod, wrapped to the panel's width, never cut.
 
-The last two need those mods. Both write into the session's folder under its project, `~/.cache/refined-claude-code/projects/<project slug>/<session id>/`: `/board` writes `board.md` and `/summ` writes `summary.md`. The panel reads only the current session's files, never another session's. The panel checks both files every 1.5 seconds and redraws a section when its file changes. With no file, or an empty one, the card is left out.
+The board needs the [board](../board) mod and the Summary tab the [summarize](../summarize) mod. Both write into the session's folder under its project, `~/.cache/refined-claude-code/projects/<project slug>/<session id>/`: `/board` writes `board.md` and `/summ` writes `summary.md`. The panel reads only the current session's files, never another session's. The panel checks both files every 1.5 seconds and redraws a section when its file changes. With no file, or an empty one, the card is left out.
+
+### Tabs
+
+Click a tab to show it. Once the panel has the keys (ctrl+x tab, or a click in it) its letter shows it too: `p` Panel, `g` Git, `s` Summary. Claude Code hands a pane's letters to it only while it holds the keys, so they do nothing from the prompt. `/panel git` (or `panel`, `summary`) opens the panel on that tab and asks for the keys, so the letters work at once; `/panel` alone opens it as before, on the tab last shown.
+
+- **Summary**: the whole session summary from the [summarize](../summarize) mod (`/summ`), in a **¶ Summary** card wrapped to the panel's width, never cut. With no summary yet the tab says so in one dim line.
+- **Git**: the repository at a glance, read-only. It never stages, commits, checks out or changes anything; every git it runs only reads, without taking git's optional locks.
+  - **± Status**: the files under `Staged`, `Unstaged` (a conflict is `U`) and `Untracked`, each with its status letter and its lines added (green) and deleted (the `error` color); an untracked file counts its lines as added. A clean tree says `Working tree clean`.
+  - **⎇ Branches**: the current branch first, `↑` commits ahead of and `↓` behind its upstream (or `no upstream`), then the five most recent other local branches, then the repository's other worktrees with their branches.
+  - **◆ Log**: the last five commits, short hash and subject on one line each.
+  - **Δ <file>**: click a file (or Tab to it and Enter while the panel has the keys) and its diff shows under the cards from its first hunk, cut to the rows the pane has, with how many lines are left out; click it again to close it.
+
+  The Git tab reads git every 2.5 seconds while it is shown, and right after each tool call completes; while another tab is shown it reads none.
 
 ### Transcript scrollbar
 
