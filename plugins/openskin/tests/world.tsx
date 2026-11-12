@@ -68,6 +68,7 @@ export function world(on: On, git: GitAnswer[] = []) {
     open.delete(e.id)
     return { value: undefined }
   })
+  // The panes open now, each shown: what the opens and closes so far leave.
   on('ui.panes', () => ({ value: [...open].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('store.get', () => ({ value: undefined }))
@@ -82,6 +83,11 @@ export function world(on: On, git: GitAnswer[] = []) {
     closed,
     write: (path: string, text: string) => files.set(path, { text, mtimeMs: ++writes }),
     remove: (path: string) => files.delete(path),
+    /** The person closes a pane (its close mark, or leaving fullscreen takes it away). */
+    closePane: (id: string) => {
+      closed.push(id)
+      open.delete(id)
+    },
   }
 }
 

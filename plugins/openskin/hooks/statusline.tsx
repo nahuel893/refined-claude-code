@@ -280,7 +280,7 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     })
     // The Git tab follows the repository while it is shown: edits made anywhere show up within GIT_TAB_MS.
     $.clock.every(GIT_TAB_MS, () => {
-      void shownTab($).then(tab => (tab === 'git' ? pollGit() : undefined))
+      void isGitTabShown($).then(isShown => (isShown ? pollGit() : undefined))
     })
     // The scrollbar follows the transcript's viewport: draw it again whenever the tracker moved.
     let seenVersion = tracker.version
@@ -318,7 +318,7 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
   // at once, without holding the call's result. Should this hook fail, the call settles as it would without it.
   on('tool.call', async ($, e, next) => {
     const result = await next(e)
-    if ((await shownTab($)) === 'git') void pollGit()
+    if (await isGitTabShown($)) void pollGit()
     return result
   }).catch(($, e, next) => next(e))
 
@@ -479,4 +479,16 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
 async function openFocused($: EngineInterface) {
   if ((await $.ui.panes()).some(pane => pane.id === PANE)) await $.ui.close({ id: PANE })
   await $.ui.open({ id: PANE, title: 'Status', focus: true })
+}
+
+/**
+ * (A function declaration: the engine follows `$` past an import only into one.)
+ * Whether the Git tab is on screen: the tab picked, and the panel open and shown. A closed panel,
+ * or one fullscreen no longer shows, keeps its tab but reads no git.
+ */
+async function isGitTabShown($: EngineInterface): Promise<boolean> {
+  if ((await shownTab($)) !== 'git') return false
+  const panes = await $.ui.panes().catch(() => [])
+
+  return panes.some(pane => pane.id === PANE && pane.isShown)
 }

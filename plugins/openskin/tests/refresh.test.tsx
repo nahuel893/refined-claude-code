@@ -1,5 +1,5 @@
 import { expect, test } from 'claude-code/testing'
-import { type GitAnswer, press, startSession, texts, world } from './world'
+import { type GitAnswer, press, startSession, texts, typed, world } from './world'
 
 const ROOT = '/home/test/projects/app'
 
@@ -17,9 +17,15 @@ const repo = (dirty: boolean): GitAnswer[] => [
 /** The Git tab's own reads: only it asks git for the top of the work tree. */
 const tabReads = (gitRuns: string[][]) => gitRuns.filter(argv => argv.includes('rev-parse')).length
 
+/** Opens the panel as `/panel` does, so the pane is open and shown. */
+const openPanel = async ($: Parameters<Parameters<typeof test>[1]>[0]) => {
+  await $.command.run(typed(''))
+}
+
 test('while the Git tab is shown, git is read again every 2.5 s, and a change shows up', async ($, on) => {
   const { clock, state, gitRuns } = world(on, repo(false))
   await startSession($, clock)
+  await openPanel($)
   await press($, 'tab:git')
   const first = tabReads(gitRuns)
   expect(first).toBe(1)
@@ -39,6 +45,7 @@ test('while the Git tab is shown, git is read again every 2.5 s, and a change sh
 test('while another tab is shown, the Git tab reads no git, and stops once left', async ($, on) => {
   const { clock, gitRuns } = world(on, repo(false))
   await startSession($, clock)
+  await openPanel($)
   await clock.advance(2500 * 4)
   expect(tabReads(gitRuns)).toBe(0)
 
@@ -56,6 +63,7 @@ test('right after a tool call completes, the Git tab reads git again, and the re
   const { clock, state, gitRuns } = world(on, repo(false))
   on('tool.call', () => ({ result: { stdout: 'edited', stderr: '', interrupted: false } as never }))
   await startSession($, clock)
+  await openPanel($)
   await press($, 'tab:git')
   const before = tabReads(gitRuns)
 
@@ -89,4 +97,32 @@ test('the Status card keeps its own pace while the Git tab polls: the status lin
   expect(cardReads()).toBe(first)
   await clock.advance(1500 * 2)
   expect(cardReads()).toBe(first + 1)
+})
+
+test('with the Git tab picked but no pane open, the Git tab reads no git', async ($, on) => {
+  const { clock, gitRuns, opened, closed } = world(on, repo(false))
+  await startSession($, clock)
+  await press($, 'tab:git')
+  expect(opened.filter(o => !closed.includes(o.id))).toEqual([])
+  const before = tabReads(gitRuns)
+  await clock.advance(2500 * 4)
+  expect(tabReads(gitRuns)).toBe(before)
+})
+
+test('once the pane is closed, neither the timer nor a tool call reads git for the Git tab', async ($, on) => {
+  const { clock, gitRuns, closed, closePane } = world(on, repo(false))
+  on('tool.call', () => ({ result: { stdout: '', stderr: '', interrupted: false } as never }))
+  await startSession($, clock)
+  await openPanel($)
+  await press($, 'tab:git')
+  await clock.advance(2500)
+  const shown = tabReads(gitRuns)
+  expect(shown).toBe(2)
+
+  closePane('openskin-status')
+  expect(closed).toEqual(['openskin-status'])
+  await clock.advance(2500 * 4)
+  await $.tool.call({ tool: 'Bash', command: 'git status' })
+  await clock.advance(0)
+  expect(tabReads(gitRuns)).toBe(shown)
 })
