@@ -56,13 +56,48 @@ export const parseNumstat = (stdout: string): { added: number; deleted: number }
   )
 
 /**
+ * (A function declaration: the engine follows `$` past an import only into one.)
+ * Runs git in `dir` as every reader of the panel does: with no optional locks, so a read never
+ * takes the index lock, and with a 5 s limit. A git that cannot run answers null.
+ */
+export async function runGit($: EngineInterface, dir: string, args: string[]) {
+  return $.process.run(['git', '--no-optional-locks', '-C', dir, ...args], { timeoutMs: 5000 }).catch(() => null)
+}
+
+/**
+ * A poll of `work` that never runs twice at once and drops none: one asked while `work` runs makes
+ * it run once more when it is done, however many were asked.
+ */
+export const coalesce = (work: () => Promise<void>) => {
+  let isBusy = false
+  let isStale = false
+
+  const poll = async (): Promise<void> => {
+    if (isBusy) {
+      isStale = true
+      return
+    }
+    isBusy = true
+    try {
+      await work()
+    } finally {
+      isBusy = false
+    }
+    if (isStale) {
+      isStale = false
+      await poll()
+    }
+  }
+  return poll
+}
+
+/**
  * Reads git in `dir`. Untracked files count as changed files, their lines not counted (numstat
  * against HEAD knows tracked files only). A repository with no commit yet has a branch and files
  * but no line counts; outside a work tree, or with no git at all, only the directory is known.
  */
 async function readGit($: EngineInterface, dir: string): Promise<ProjectStatus> {
-  const git = (args: string[]) =>
-    $.process.run(['git', '--no-optional-locks', '-C', dir, ...args], { timeoutMs: 5000 }).catch(() => null)
+  const git = (args: string[]) => runGit($, dir, args)
   const [status, numstat] = await Promise.all([
     git(['status', '--porcelain=v2', '--branch', '--untracked-files=all']),
     git(['diff', '--numstat', 'HEAD']),
@@ -81,32 +116,19 @@ async function readGit($: EngineInterface, dir: string): Promise<ProjectStatus> 
 export function startProject($: EngineInterface, cwd: string) {
   let dir = cwd
   let seen = ''
-  let isBusy = false
-  let isStale = false
 
-  const poll = async (next?: string): Promise<void> => {
+  const run = coalesce(async () => {
+    const status = await readGit($, dir)
+    const text = JSON.stringify(status)
+    if (text !== seen) {
+      seen = text
+      await update($, project, () => status)
+    }
+  })
+  return (next?: string): Promise<void> => {
     if (next) dir = next
-    if (isBusy) {
-      isStale = true
-      return
-    }
-    isBusy = true
-    try {
-      const status = await readGit($, dir)
-      const text = JSON.stringify(status)
-      if (text !== seen) {
-        seen = text
-        await update($, project, () => status)
-      }
-    } finally {
-      isBusy = false
-    }
-    if (isStale) {
-      isStale = false
-      await poll()
-    }
+    return run()
   }
-  return poll
 }
 
 /** The project as the Status card draws it; null before git has first been read. */

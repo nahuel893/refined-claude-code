@@ -20,8 +20,8 @@ Branch: `feat/panel-tabs`. Delivery: `exception-ok` (repo policy merges the bran
 
 | ID | Specs | Route | Status | Commit |
 |----|-------|-------|--------|--------|
-| T1 | S1, S2, S3 | delegated (context backstop) | done | this commit (`feat(openskin): add tabs to the status panel`) |
-| T2 | S4, S6 | delegated (context backstop) | pending | |
+| T1 | S1, S2, S3 | delegated (context backstop) | done | 07510d0 |
+| T2 | S4, S6 | delegated (context backstop) | done | this commit (`feat(openskin): add the read-only Git tab`) |
 | T3 | S5 | delegated (context backstop) | pending | |
 | T4 | S1-S5 docs (README, CLAUDE.md) | delegated (context backstop) | pending | |
 
@@ -41,3 +41,4 @@ Branch: `feat/panel-tabs`. Delivery: `exception-ok` (repo policy merges the bran
 - L7 (exploration): panel lives in `plugins/openskin/hooks/statusline.tsx` (pane `openskin-status`, render :319-403, 1.5 s `$.clock.every` at :255); notes in `hooks/notes.tsx`; git via `$.process.run(['git','--no-optional-locks','-C',dir,...])` in `hooks/project.tsx:64`; no `Tabs` element and no global key API; `hotkey` needs pane focus; no `tool.complete` event, use a `tool.call` hook wrapping `next(e)`. Engine types are not laid in `.claude-plugin/types/` yet, so `tsc` cannot run. Baseline: openskin 126 tests.
 - L8: route is one delegated writer for T1-T4 in order, by the long-session context backstop. Forecast ~600-800 authored lines with tests; delivery `exception-ok` because the repo merges branches locally. Next: T1.
 - L9 (T1): tab bar (Panel, Git, Summary; hotkeys p, g, s), Summary card moved to the Summary tab, `/panel <tab>` opens with focus after 100 ms. Tests: 9 new in `tests/tabs.test.tsx`, 2 notes tests adapted; `claude plugin test plugins/openskin`: 135 pass, 0 fail; `claude plugin validate plugins/openskin`: passed with the 2 baseline warnings (author, icon). Git tab draws a placeholder until T2.
+- L10 (T2): Git tab (`hooks/git.tsx`): Status (staged, unstaged, untracked with `+/-`; clean tree line), Branches (current with ↑/↓ and upstream, 5 recent, other worktrees), Log (5 commits), picked file's diff cut to the pane's rows. `runGit` and `coalesce` extracted from `hooks/project.tsx` and reused; the Status card's git argv is unchanged. Git is read when the tab is shown and when a file is picked (timer in T3). Tests: 11 new in `tests/git.test.tsx`; `claude plugin test plugins/openskin`: 146 pass, 0 fail; `claude plugin validate plugins/openskin`: passed with the 2 baseline warnings.

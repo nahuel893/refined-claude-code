@@ -56,8 +56,7 @@ export function world(on: On, git: GitAnswer[] = []) {
     gitRuns.push(argv)
     const line = argv.join(' ')
     const answer = state.git.find(({ pattern }) => pattern.test(line))
-    const exitCode = answer?.exitCode ?? 0
-    return { value: { exitCode, stdout: answer && exitCode === 0 ? answer.stdout : '', stderr: '' } as never }
+    return { value: { exitCode: answer?.exitCode ?? 0, stdout: answer?.stdout ?? '', stderr: '' } as never }
   })
   on('ui.open', ($, e) => {
     opened.push({ ...e })

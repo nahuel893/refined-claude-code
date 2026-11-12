@@ -35,6 +35,36 @@ export type Limit = { kind: string; percentUsed: number; resetsAt?: string }
 /** The status panel's tab shown: the cards, the Git view or the session summary. */
 export type PanelTab = 'panel' | 'git' | 'summary'
 
+/** Where a file of the Git tab stands: staged in the index, changed in the work tree, or untracked. */
+export type GitGroup = 'staged' | 'unstaged' | 'untracked'
+
+/**
+ * A file of the Git tab: its status letter in its group (`M`, `A`, `D`, `R`, `U` for a conflict,
+ * `?` untracked), its path from the repository's top, and its lines added and deleted (null for a
+ * binary file, or one git gave no count for).
+ */
+export type GitFile = { group: GitGroup; code: string; path: string; added: number | null; deleted: number | null }
+
+/** A file of the Git tab picked for its diff. */
+export type GitPick = { group: GitGroup; path: string }
+
+/**
+ * What the Git tab draws, read with git: `root` null outside a work tree, everything else empty
+ * then. `branch` is the current one (`(detached)` off any), `branches` the most recent other local
+ * ones, `worktrees` the other work trees of the repository, `log` the last commits, and `diff` the
+ * picked file's rows from its first hunk, when one is picked.
+ */
+export type GitView = {
+  dir: string
+  root: string | null
+  branch: { name: string; upstream: string | null; ahead: number; behind: number } | null
+  files: GitFile[]
+  branches: string[]
+  worktrees: { path: string; branch: string | null }[]
+  log: { hash: string; subject: string }[]
+  diff: (GitPick & { rows: string[] }) | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
     openskin: {
@@ -49,6 +79,8 @@ declare module 'claude-code' {
       summary: string
       project: ProjectStatus | null
       tab: PanelTab
+      gitView: GitView | null
+      gitPick: GitPick | null
     }
   }
 }

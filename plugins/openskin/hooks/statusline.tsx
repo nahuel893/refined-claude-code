@@ -3,12 +3,13 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import { contextSection, measureContext, readThresholds, startContextMeter, stopContextMeter } from './meters/context'
 import { countTurn, startTokenMeter, tokenSection } from './meters/tokens'
 import { measureUsage, startUsageMeter, stopUsageMeter, usageSection } from './meters/usage'
+import { drawGitTab, gitTabState, startGitView } from './git'
 import { boardSection, startNotes, summarySection } from './notes'
 import { GIT_EVERY, inputDir, projectStatus, shortHome, startProject } from './project'
 import { drawScrollbar, type Tracker } from './scrollbar'
 import { drawTabBar, showTab, shownTab, tabNamed, TABS } from './tabs'
 import { paint, type Theme } from './theme'
-import type { StatusLines } from '../types'
+import type { PanelTab, StatusLines } from '../types'
 
 /**
  * The status panel docked beside the transcript in fullscreen. Claude Code runs the person's
@@ -21,7 +22,8 @@ import type { StatusLines } from '../types'
  * subscription usage), whose hooks are registered here: a module takes one hook per event.
  * Last come the board and the session summary of `./notes`, polled on the same timer.
  * Down the panel's left edge runs a scrollbar for the transcript (`./scrollbar`): click a cell to jump there.
- * Over the cards runs a tab bar (`./tabs`): Panel holds the cards, Summary the session summary.
+ * Over the cards runs a tab bar (`./tabs`): Panel holds the cards, Git the repository (`./git`),
+ * Summary the session summary.
  *
  * Each part is a card: a round border with its title drawn over the top edge. The first card,
  * Status, is the mod's own: the project's directory, branch and uncommitted changes from
@@ -201,6 +203,15 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
   let dockedMark = ''
   // The home directory, which the Status card writes as `~`.
   let homeDir = ''
+  // The Git tab's reader, known once session.start has run.
+  let gitView: ReturnType<typeof startGitView> | null = null
+  const pollGit = async () => {
+    await gitView?.poll()
+  }
+  // A tab shown by a press or /panel: the Git tab reads git at once.
+  const onShow = async (tab: PanelTab) => {
+    if (tab === 'git') await pollGit()
+  }
 
   on('session.start', async ($, e, next) => {
     // The meters drawn under the status line; one that fails leaves the others and the status line be.
@@ -219,6 +230,7 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     let isBusy = false
     const pollNotes = startNotes($, home, e.cwd, id)
     const pollProject = startProject($, e.cwd)
+    gitView = startGitView($, e.cwd)
     let ticks = 0
 
     // The script rewrites SOURCE on every run, so a new mtime alone is not new input:
@@ -235,7 +247,9 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
         if (json === seenJson) return
         seenJson = json
         // New input (a turn ended, or the session moved): git is read again, in the directory it names.
-        void pollProject(inputDir(json, e.cwd))
+        const dir = inputDir(json, e.cwd)
+        void pollProject(dir)
+        gitView?.moveTo(dir)
 
         const { exitCode, stdout } = await $.process.run([script], {
           stdin: json,
@@ -307,6 +321,7 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     }
 
     await showTab($, tab)
+    void onShow(tab)
     // The surface grants the keys only while the composer is idle, which it is not while this
     // command runs: open once it has returned.
     $.clock.after(OPEN_DELAY_MS, () => {
@@ -347,12 +362,13 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     const columns = Math.max(1, e.props.bodyColumns - CARD_CHROME - BAR_WIDTH)
     // After the Status card, in this order: the context window, the tokens, the subscription,
     // the board.
-    const [lines, project, , tab, summary, ...drawn] = await Promise.all([
+    const [lines, project, , tab, summary, git, ...drawn] = await Promise.all([
       read($, statusLines),
       projectStatus($),
       read($, scrollbarTick),
       shownTab($),
       summarySection($),
+      gitTabState($),
       contextSection($, thresholds, theme),
       tokenSection($),
       usageSection($, columns, theme),
@@ -423,7 +439,8 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     if (tab === 'summary') {
       body = [summary ? drawSection(summary) : <Text dimColor>No summary yet: /summ writes one.</Text>]
     } else if (tab === 'git') {
-      body = [<Text dimColor>Reading git…</Text>]
+      // The pane's body less the tab bar's row.
+      body = drawGitTab({ Box, Button, Text }, $, theme, git, e.props.scroll.bodyRows - 1, homeDir, card, pollGit)
     } else {
       body = [card('✿ Status', status), ...sections.map(drawSection)]
     }
@@ -432,7 +449,7 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
       <Box flexDirection="row" {...fill}>
         {bar}
         <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-          {drawTabBar({ Box, Button }, $, tab)}
+          {drawTabBar({ Box, Button }, $, tab, onShow)}
           {body}
         </Box>
       </Box>

@@ -35,12 +35,24 @@ export async function showTab($: EngineInterface, tab: PanelTab): Promise<void> 
 
 export type TabBarUi = Pick<Elements['terminal'], 'Box' | 'Button'>
 
-/** The tab bar: one plain Button per tab (`p: Panel`), the shown one at full strength, the rest dim. */
-export function drawTabBar({ Box, Button }: TabBarUi, $: EngineInterface, current: PanelTab) {
+/**
+ * The tab bar: one plain Button per tab (`p: Panel`), the shown one at full strength, the rest dim.
+ * `onShow` runs once a pressed tab is shown.
+ */
+export function drawTabBar({ Box, Button }: TabBarUi, $: EngineInterface, current: PanelTab, onShow: (tab: PanelTab) => Promise<void>) {
   return (
     <Box flexDirection="row" gap={2} paddingX={1}>
       {TABS.map(tab => (
-        <Button key={`tab:${tab.id}`} hotkey={tab.hotkey} plain dimColor={tab.id !== current} onPress={() => showTab($, tab.id)}>
+        <Button
+          key={`tab:${tab.id}`}
+          hotkey={tab.hotkey}
+          plain
+          dimColor={tab.id !== current}
+          onPress={async () => {
+            await showTab($, tab.id)
+            await onShow(tab.id)
+          }}
+        >
           {tab.label}
         </Button>
       ))}
