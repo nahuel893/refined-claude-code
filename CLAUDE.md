@@ -47,7 +47,7 @@ The panel reuses the user's status line script, which lives outside this repo:
   - `claude plugin test plugins/<mod>`
   - `tsc -p plugins/<mod>`, once the engine has laid the types in `.claude-plugin/types/` (gitignored).
 - Test-first for behavior changes. Observe RED, then GREEN. Regression tests sit next to the code they guard.
-- Last known test counts: openskin 151, command-register 44, board 28, summarize 9.
+- Last known test counts: openskin 153, command-register 44, board 28, summarize 9.
 - Artifacts (code, comments, docs, commit messages) are in English.
 
 ## Commits and publishing
