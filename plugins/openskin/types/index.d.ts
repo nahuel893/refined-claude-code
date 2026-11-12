@@ -32,6 +32,9 @@ export type Fill = { value: number; isEstimate: boolean; tokens?: number; window
 /** One rate-limit window of the subscription, as the last API response reported it. */
 export type Limit = { kind: string; percentUsed: number; resetsAt?: string }
 
+/** The status panel's tab shown: the cards, the Git view or the session summary. */
+export type PanelTab = 'panel' | 'git' | 'summary'
+
 declare module 'claude-code' {
   interface PluginState {
     openskin: {
@@ -45,6 +48,7 @@ declare module 'claude-code' {
       board: BoardLines
       summary: string
       project: ProjectStatus | null
+      tab: PanelTab
     }
   }
 }

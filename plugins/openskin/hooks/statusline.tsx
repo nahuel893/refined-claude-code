@@ -1,11 +1,12 @@
 import { atom, read, update } from 'claude-code'
-import type { On, PluginOptions } from 'claude-code'
+import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import { contextSection, measureContext, readThresholds, startContextMeter, stopContextMeter } from './meters/context'
 import { countTurn, startTokenMeter, tokenSection } from './meters/tokens'
 import { measureUsage, startUsageMeter, stopUsageMeter, usageSection } from './meters/usage'
 import { boardSection, startNotes, summarySection } from './notes'
 import { GIT_EVERY, inputDir, projectStatus, shortHome, startProject } from './project'
 import { drawScrollbar, type Tracker } from './scrollbar'
+import { drawTabBar, showTab, shownTab, tabNamed, TABS } from './tabs'
 import { paint, type Theme } from './theme'
 import type { StatusLines } from '../types'
 
@@ -20,6 +21,7 @@ import type { StatusLines } from '../types'
  * subscription usage), whose hooks are registered here: a module takes one hook per event.
  * Last come the board and the session summary of `./notes`, polled on the same timer.
  * Down the panel's left edge runs a scrollbar for the transcript (`./scrollbar`): click a cell to jump there.
+ * Over the cards runs a tab bar (`./tabs`): Panel holds the cards, Summary the session summary.
  *
  * Each part is a card: a round border with its title drawn over the top edge. The first card,
  * Status, is the mod's own: the project's directory, branch and uncommitted changes from
@@ -31,6 +33,8 @@ const SCRIPT = '.claude/statusline.sh'
 const REFRESH_MS = 1500
 const SCROLLBAR_MS = 250
 const PANE = 'openskin-status'
+/** How long `/panel <tab>` waits after answering before it opens the panel with the keys. */
+const OPEN_DELAY_MS = 100
 const SEPARATOR = / \| /
 
 const statusLines = atom({ plugin: 'openskin', key: 'statusLines' } as const, [])
@@ -266,7 +270,10 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
       void update($, scrollbarTick, n => n + 1)
     })
 
-    await $.command.register({ name: 'panel', description: 'Open the status panel beside the transcript' })
+    await $.command.register({
+      name: 'panel',
+      description: 'Open the status panel beside the transcript; /panel panel, git or summary opens it on that tab',
+    })
 
     return next(e)
   })
@@ -287,10 +294,27 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     return next(e)
   })
 
-  on('command.run', { command: 'panel' }, async $ => {
-    await $.ui.open({ id: PANE, title: 'Status' })
+  on('command.run', { command: 'panel' }, async ($, e) => {
+    if (!e.args.trim()) {
+      await $.ui.open({ id: PANE, title: 'Status' })
 
-    return { text: 'Status panel opened.' }
+      return { text: 'Status panel opened.' }
+    }
+
+    const tab = tabNamed(e.args)
+    if (tab === null) {
+      return { text: `No tab "${e.args.trim()}": /panel opens the panel, /panel panel, /panel git or /panel summary opens it on that tab.` }
+    }
+
+    await showTab($, tab)
+    // The surface grants the keys only while the composer is idle, which it is not while this
+    // command runs: open once it has returned.
+    $.clock.after(OPEN_DELAY_MS, () => {
+      void openFocused($)
+    })
+    const label = TABS.find(each => each.id === tab)!.label
+
+    return { text: `Status panel opened on ${label}: p, g and s switch tabs while it has the keys.` }
   })
 
   // Only the fullscreen layout docks a pane beside the transcript; elsewhere a pane
@@ -314,23 +338,25 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     return next(e)
   })
 
-  // The Status card (the project, then the status line's parts, one row each), then a card per
-  // section that has something to show, stacked with no blank row between them.
+  // The tab bar, then the tab shown. Panel: the Status card (the project, then the status line's
+  // parts, one row each), then a card per section that has something to show, stacked with no
+  // blank row between them. Summary: the session summary's card, or a dim line without one.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     // The body less each card's border and padding on both sides.
     const columns = Math.max(1, e.props.bodyColumns - CARD_CHROME - BAR_WIDTH)
     // After the Status card, in this order: the context window, the tokens, the subscription,
-    // the board, the session summary.
-    const [lines, project, , ...drawn] = await Promise.all([
+    // the board.
+    const [lines, project, , tab, summary, ...drawn] = await Promise.all([
       read($, statusLines),
       projectStatus($),
       read($, scrollbarTick),
+      shownTab($),
+      summarySection($),
       contextSection($, thresholds, theme),
       tokenSection($),
       usageSection($, columns, theme),
       boardSection($, theme),
-      summarySection($),
     ])
     const rows = panelRows(lines)
     const sections = drawn.filter((section): section is Section => section !== null)
@@ -360,6 +386,8 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
         </Box>
       </Box>
     )
+
+    const drawSection = (section: Section) => card(section.heading, section.rows.map(row => drawRow(row, section.wrap)))
 
     const status: JSX.Element[] = []
     if (project) {
@@ -391,14 +419,33 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     // The transcript's scrollbar runs down the left edge, a cell per row of the pane's body, then the cards.
     const bar = drawScrollbar({ Box, Button, Text }, $, tracker, Math.max(1, e.props.scroll.bodyRows), theme)
 
+    let body: JSX.Element[]
+    if (tab === 'summary') {
+      body = [summary ? drawSection(summary) : <Text dimColor>No summary yet: /summ writes one.</Text>]
+    } else if (tab === 'git') {
+      body = [<Text dimColor>Reading git…</Text>]
+    } else {
+      body = [card('✿ Status', status), ...sections.map(drawSection)]
+    }
+
     return (
       <Box flexDirection="row" {...fill}>
         {bar}
         <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-          {card('✿ Status', status)}
-          {sections.map(section => card(section.heading, section.rows.map(row => drawRow(row, section.wrap))))}
+          {drawTabBar({ Box, Button }, $, tab)}
+          {body}
         </Box>
       </Box>
     )
   })
+}
+
+/**
+ * (A function declaration: the engine follows `$` past an import only into one.)
+ * Opens the panel with the keys. Opening an id that is already open only retitles it and does not
+ * grant them: close it first.
+ */
+async function openFocused($: EngineInterface) {
+  if ((await $.ui.panes()).some(pane => pane.id === PANE)) await $.ui.close({ id: PANE })
+  await $.ui.open({ id: PANE, title: 'Status', focus: true })
 }

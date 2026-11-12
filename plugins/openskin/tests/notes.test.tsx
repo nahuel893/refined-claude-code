@@ -75,7 +75,7 @@ test('a board line: done struck through and dim, pending plain, waiting marked i
   ])
 })
 
-test('the panel draws the board, one row per line, and the summary wrapped, after the other sections', async ($, on) => {
+test('the Panel tab draws the board, one row per line, and the Summary tab the summary wrapped', async ($, on) => {
   const { write } = world(on)
   write(BOARD, '✓ Parser written\n○ Add tests\n\n◇ Pick a name\n')
   write(SUMMARY, 'The goal was a parser for the config files, and it is written and tested.\n')
@@ -83,7 +83,7 @@ test('the panel draws the board, one row per line, and the summary wrapped, afte
 
   const ui = await $.ui.mount(PANE)
   const all = (await ui.findAll({ type: 'Text' })).map(text => text.text)
-  expect(all.filter(text => ['≡ Board · 1 of 3', '¶ Summary'].includes(text ?? ''))).toEqual(['≡ Board · 1 of 3', '¶ Summary'])
+  expect(all.filter(text => ['≡ Board · 1 of 3', '¶ Summary'].includes(text ?? ''))).toEqual(['≡ Board · 1 of 3'])
   expect((await ui.findAll({ type: 'Text', text: /^(Parser written|Add tests|Pick a name)$/ })).map(text => text.text)).toEqual([
     'Parser written',
     'Add tests',
@@ -91,6 +91,8 @@ test('the panel draws the board, one row per line, and the summary wrapped, afte
   ])
   expect((await ui.findAll({ type: 'Text', text: /^Parser written$/ })).at(-1)?.props).toMatchObject({ strikethrough: true, dimColor: true })
   expect((await ui.findAll({ type: 'Text', text: /^◇$/ })).at(-1)?.props.color).toBe(THEME_DEFAULTS.accent)
+  await ui.press({ key: 'tab:summary' })
+  expect((await ui.findAll({ type: 'Text' })).map(text => text.text)).toContain('¶ Summary')
   const summary = (await ui.findAll({ type: 'Text', text: /^The goal was a parser/ }))[0]
   expect(summary?.props.wrap).toBe('wrap')
   await ui.unmount()
@@ -131,11 +133,17 @@ test('a file that changes is drawn again, and one removed takes its section away
   const after = await texts($)
   expect(after).toContain('Ship it')
   expect(after).toContain('≡ Board · 1 of 2')
-  expect(after).toContain('Tests are in.')
 
   remove(BOARD)
   await clock.advance(1500)
   const gone = await texts($)
   expect(gone.some(text => text?.startsWith('≡ Board'))).toBe(false)
-  expect(gone).toContain('¶ Summary')
+
+  const ui = await $.ui.mount(PANE)
+  await ui.press({ key: 'tab:summary' })
+  expect((await ui.findAll({ type: 'Text' })).map(text => text.text)).toContain('Tests are in.')
+  await ui.unmount()
+  remove(SUMMARY)
+  await clock.advance(1500)
+  expect(await texts($)).not.toContain('¶ Summary')
 })
