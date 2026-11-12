@@ -34,6 +34,8 @@ const DOCKED = '.cache/openskin/docked'
 const SCRIPT = '.claude/statusline.sh'
 const REFRESH_MS = 1500
 const SCROLLBAR_MS = 250
+/** How often the Git tab reads git while it is shown; never while another tab is. */
+const GIT_TAB_MS = 2500
 const PANE = 'openskin-status'
 /** How long `/panel <tab>` waits after answering before it opens the panel with the keys. */
 const OPEN_DELAY_MS = 100
@@ -276,6 +278,10 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
       // Edits made outside the session change no input: git is read anyway every GIT_EVERY ticks.
       if (++ticks % GIT_EVERY === 0) void pollProject()
     })
+    // The Git tab follows the repository while it is shown: edits made anywhere show up within GIT_TAB_MS.
+    $.clock.every(GIT_TAB_MS, () => {
+      void shownTab($).then(tab => (tab === 'git' ? pollGit() : undefined))
+    })
     // The scrollbar follows the transcript's viewport: draw it again whenever the tracker moved.
     let seenVersion = tracker.version
     $.clock.every(SCROLLBAR_MS, () => {
@@ -307,6 +313,14 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     await countTurn($, e.usage)
     return next(e)
   })
+
+  // A tool call that completed may have changed the repository: the Git tab, while shown, reads git
+  // at once, without holding the call's result. Should this hook fail, the call settles as it would without it.
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    if ((await shownTab($)) === 'git') void pollGit()
+    return result
+  }).catch(($, e, next) => next(e))
 
   on('command.run', { command: 'panel' }, async ($, e) => {
     if (!e.args.trim()) {
