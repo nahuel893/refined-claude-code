@@ -133,7 +133,7 @@ The board needs the [board](../board) mod and the Summary tab the [summarize](..
 
 ### Tabs
 
-Click a tab to show it. Once the panel has the keys (ctrl+x tab, or a click in it) its letter shows it too: `p` Panel, `g` Git, `s` Summary. Claude Code hands a pane's letters to it only while it holds the keys, so they do nothing from the prompt. `/panel git` (or `panel`, `summary`) opens the panel on that tab and asks for the keys, so the letters work at once; `/panel` alone opens it as before, on the tab last shown.
+Click a tab to show it. Once the panel has the keys (ctrl+x tab, or a click in it) its letter shows it too: `p` Panel, `g` Git, `s` Summary. A square before the tabs tells whether it has them: `■` while it does, `□` while the prompt does. Claude Code hands a pane's letters to it only while it holds the keys, so they do nothing from the prompt. `/panel git` (or `panel`, `summary`) opens the panel on that tab and asks for the keys, so the letters work at once; `/panel` alone opens it as before, on the tab last shown.
 
 - **Summary**: the whole session summary from the [summarize](../summarize) mod (`/summ`), in a **¶ Summary** card wrapped to the panel's width, never cut. With no summary yet the tab says so in one dim line.
 - **Git**: the repository at a glance, read-only. It never stages, commits, checks out or changes anything; every git it runs only reads, without taking git's optional locks.
