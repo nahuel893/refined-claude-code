@@ -6,10 +6,12 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 github="nahuel893/refined-claude-code"
-# shellcheck source=scripts/mods.sh
-. "$repo/scripts/mods.sh"
+# Every mod the marketplace lists, from each entry's "./plugins/<mod>" source:
+# a mod added to .claude-plugin/marketplace.json is installed with no edit here.
 mods=()
-while IFS= read -r mod; do mods+=("$mod"); done < <(mods_of "$repo/.claude-plugin/marketplace.json")
+while IFS= read -r mod; do mods+=("$mod"); done < <(
+	sed -n 's|.*"source": *"\./plugins/\([^"]*\)".*|\1|p' "$repo/.claude-plugin/marketplace.json"
+)
 
 usage() {
 	cat <<'EOF'
