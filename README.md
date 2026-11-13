@@ -58,11 +58,21 @@ cd refined-claude-code
 scripts/install.sh
 ```
 
-[`scripts/install.sh`](scripts/install.sh) installs git and Claude Code when they are missing, adds the marketplace and the four mods, then installs better-claude's narrator with a speech tool (speech-dispatcher on Linux when neither it nor espeak-ng is there). It is safe to run again. Options:
+[`scripts/install.sh`](scripts/install.sh) installs git and Claude Code when they are missing, adds the marketplace and every mod it lists, then installs better-claude's narrator with a speech tool (speech-dispatcher on Linux when neither it nor espeak-ng is there). It is safe to run again. Options:
 
 - `--local`: add the clone as the marketplace instead of GitHub, so your edits apply after `/reload-plugins`.
 - `--no-narrator`: skip the narrator.
 - `--piper [locale]`: on Arch Linux, also give the narrator a Piper voice ([below](#a-natural-voice-for-the-narrator-on-arch-linux)).
+
+### Update
+
+From the clone, one command brings every mod up to date:
+
+```bash
+scripts/update.sh
+```
+
+[`scripts/update.sh`](scripts/update.sh) pulls the clone, refreshes the marketplace, updates each mod the marketplace lists and installs the ones you do not have yet, so a new mod arrives with the next update. It needs no sudo and takes a few seconds. Restart Claude Code afterwards, or run `/reload-plugins` when the marketplace is the clone (`--local`).
 
 ### By hand
 

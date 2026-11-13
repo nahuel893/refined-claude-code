@@ -6,7 +6,10 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 github="nahuel893/refined-claude-code"
-mods=(openskin command-register board summarize)
+# shellcheck source=scripts/mods.sh
+. "$repo/scripts/mods.sh"
+mods=()
+while IFS= read -r mod; do mods+=("$mod"); done < <(mods_of "$repo/.claude-plugin/marketplace.json")
 
 usage() {
 	cat <<'EOF'
