@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Install the refined-claude-code mods and what they need: git, Claude Code,
-# the marketplace with its four mods, and better-claude's narrator with a
+# the marketplace with every mod it lists, and better-claude's narrator with a
 # speech tool. Safe to run again: every step skips what is already there.
 set -euo pipefail
 
-repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The real path, so a symlink to this script (say, in ~/bin) still finds the repo.
+repo="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 github="nahuel893/refined-claude-code"
 # Every mod the marketplace lists, from each entry's "./plugins/<mod>" source:
 # a mod added to .claude-plugin/marketplace.json is installed with no edit here.
@@ -12,13 +13,15 @@ mods=()
 while IFS= read -r mod; do mods+=("$mod"); done < <(
 	sed -n 's|.*"source": *"\./plugins/\([^"]*\)".*|\1|p' "$repo/.claude-plugin/marketplace.json"
 )
+# sed failing inside < <(...) does not stop the script: check the list instead.
+((${#mods[@]})) || { printf 'error: no mods found in %s\n' "$repo/.claude-plugin/marketplace.json" >&2; exit 1; }
 
 usage() {
 	cat <<'EOF'
 Usage: scripts/install.sh [--local] [--no-narrator] [--piper [locale]]
 
 Installs git and Claude Code when they are missing, then the refined-claude-code
-marketplace with openskin, command-register, board and summarize, and
+marketplace with every mod it lists, and
 better-claude's narrator with a speech tool.
 
   --local         add this checkout as the marketplace instead of GitHub, so

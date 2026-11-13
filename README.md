@@ -74,7 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/nahuel893/refined-claude-code/main/
 
 From a clone, `scripts/update.sh` does the same and pulls the clone first.
 
-[`scripts/update.sh`](scripts/update.sh) refreshes the marketplace, updates each of its mods you have and installs the ones you do not have yet, so a new mod arrives with the next update. It asks Claude Code for the list, needs no sudo and takes a few seconds. Restart Claude Code afterwards, or run `/reload-plugins` when the marketplace is a clone (`--local`).
+[`scripts/update.sh`](scripts/update.sh) refreshes the marketplace, updates each of its mods you have and installs the ones you do not have yet, so a new mod arrives with the next update (and so does a mod you skipped). It asks Claude Code for the list, needs no sudo and takes a few seconds. Restart Claude Code afterwards, or run `/reload-plugins` when the marketplace is a clone (`--local`).
 
 ### By hand
 
