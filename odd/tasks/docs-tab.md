@@ -1,0 +1,33 @@
+# Docs tab (openskin)
+
+Objective: a fourth tab in the openskin status panel lists the project's reference documents (architecture, design, notes, ODD files), kept by Claude through a tool, each one readable in the panel.
+Branch: `feat/docs-tab`. Delivery: `exception-ok` (repo policy merges the branch into `main` locally; no PRs). Test runner: `claude plugin test plugins/openskin`, plus `claude plugin validate plugins/openskin`.
+
+## Specs
+
+- **S1 Docs tab.** "me gustaria implementar la seccion para tener apuntes, otra pestaña mas." The tab bar gets a fourth tab after Summary. Assumption: its label is **Docs**, its hotkey `d`, and `/panel docs` opens the panel on it like the other tabs; the unknown-tab message and the help text name it.
+- **S2 The list.** "ME imagino una lista como la de git estatus donde se van agregando archivos de arquitectura, diseño, apuntes, etc. Tambien podrian ser los archivos de odd?" The tab draws the index as a list grouped like the Git tab's Status: one heading per group, then one row per document, path relative to the project. Assumption: Claude names the group when it adds a document (for example `Architecture`, `Design`, `Notes`, `ODD`); a document added with no group goes under `Docs`; groups keep the order they were first used. A listed file that no longer exists stays listed, dimmed, marked `missing`. An empty index shows one dim line: `No documents yet: Claude adds them with the docs tool.`
+- **S3 Claude keeps the index.** "Esta referencia la tendria que actualizar el agente." openskin registers a tool (`docs`, the same mechanism as the board mod's `board` tool, `$.tool.register`) with: add a path (optional group; adding an indexed path again moves it to the new group), remove a path, and list the index. Assumption: paths are stored relative to the project and a path outside the project is refused with a one-line reason; the tool answers with the numbered index after each change. Assumption: at session start Claude gets one line saying the tool exists and to index the architecture, design, notes and ODD documents it writes or relies on (the board mod's session-start hint is the model).
+- **S4 Per project.** "Si, creo que lo mejor es que el indice de documentos sea por proyecto." The index belongs to the project, not the session: it survives across sessions and every session in the project sees the same index. Assumption: it lives at `~/.cache/refined-claude-code/projects/<cwd slug>/docs.json` (the slug every mod uses, beside the session folders), so nothing is written into the repository.
+- **S5 Readable in the panel.** "Y esos documentos deberian ser visibles en el panel." Picking a document (a click, or the keyboard while the pane has focus) shows its contents in the tab under the list, cut to the pane's rows the way the Git tab cuts a diff. The list and the open document follow outside changes (to the index or the file) while the tab is shown, and are not read while it is not.
+- **S6 Read-only documents.** The panel and the tool never write, move or delete a listed document; the tool writes only the index file.
+
+## Tasks
+
+| ID | Specs | Route | Status | Commit |
+|----|-------|-------|--------|--------|
+| T1 | S3, S4, S6 | delegated (context backstop) | done | see L5 |
+| T2 | S1, S2, S5, S6 | delegated (context backstop) | pending | |
+| T3 | S1-S5 docs (README, CLAUDE.md), version 0.12.0 | delegated (context backstop) | pending | |
+
+- T1: index store (read, write, relative paths, project scope) and the `docs` tool with its session-start hint.
+- T2: Docs tab: tab bar entry, `/panel docs`, grouped list, missing marks, pick and view, refresh only while shown.
+- T3: openskin README and CLAUDE.md, test count, openskin 0.11.0 -> 0.12.0 in `plugin.json` and `marketplace.json`.
+
+## Log
+
+- L1 (2026-11-13, user): "perfecto, me gustaria implementar la seccion para tener apuntes, otra pestaña mas. ME imagino una lista como la de git estatus donde se van agregando archivos de arquitectura, diseño, apuntes, etc. Tambien podrian ser los archivos de odd? Esta referencia la tendria que actualizar el agente. Y esos documentos deberian ser visibles en el panel."
+- L2 (user, choosing per project over per session): "perfecto. Implementalo. Si, creo que lo mejor es que el indice de documentos sea por proyecto."
+- L3 (exploration): tabs in `plugins/openskin/hooks/tabs.tsx` (`TABS`, `drawTabBar` with the focus square), panel render in `hooks/statusline.tsx` (Pane render ~line 373), Git tab list + picked-file view in `hooks/git.tsx` (pick cut to pane rows), session files read in `hooks/notes.tsx` (`notePaths`, mtime polling). Agent-kept list precedent: board mod `$.tool.register` in `plugins/board/hooks/` (~line 211) with a session-start hint. Engine types not laid, `tsc` cannot run. Baseline: openskin 154 tests.
+- L4: route is one delegated writer for T1-T3 in order, by the long-session context backstop. Forecast ~500-700 authored lines with tests. Delivery `exception-ok`. Next: T1.
+- L5 (T1): `hooks/docs.tsx` keeps the index at `~/.cache/refined-claude-code/projects/<cwd slug>/docs.json` (`{ groups, docs }`, groups in first-use order, an empty group dropped) and serves the `docs` tool (`mcp__openskin__docs`: `add` with an optional group, a group in another case joining the listed one, an indexed path moving; `remove`; `list`), answering the numbered index after each change. Paths are resolved by spelling (absolute, `~/`, `./`, `..`) and stored relative to the session's cwd; outside the project, one line: `Not added: <path> is outside the project (<cwd>).` Calls are chained in memory, so close calls lose no entry; a malformed or missing `docs.json` reads as empty. The tool is registered in the status panel's `session.start` and answered in its `tool.call` hook (a module takes one hook per event), so it exists only while `statusPanel` is on (assumption); a new `classic.SessionStart` hook adds the one-line hint. RED: 15 new tests in `tests/docs.test.tsx` failed (nothing registered, no hint, `no implementation for tool.call`). GREEN: `claude plugin test plugins/openskin` 170 pass, 0 fail; `claude plugin validate plugins/openskin` passes with the baseline warnings (the new hook listed with `.catch`).

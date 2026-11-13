@@ -65,6 +65,15 @@ export type GitView = {
   diff: (GitPick & { rows: string[] }) | null
 }
 
+/** A document of the project's docs index: its path from the project's directory, and its group. */
+export type DocEntry = { path: string; group: string }
+
+/**
+ * The project's docs index, as `docs.json` holds it: the groups in the order they were first used,
+ * and the documents in the order they were added.
+ */
+export type DocsIndex = { groups: string[]; docs: DocEntry[] }
+
 declare module 'claude-code' {
   interface PluginState {
     openskin: {

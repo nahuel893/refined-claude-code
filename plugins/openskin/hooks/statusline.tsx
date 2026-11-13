@@ -3,6 +3,7 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import { contextSection, measureContext, readThresholds, startContextMeter, stopContextMeter } from './meters/context'
 import { countTurn, startTokenMeter, tokenSection } from './meters/tokens'
 import { measureUsage, startUsageMeter, stopUsageMeter, usageSection } from './meters/usage'
+import { callDocsTool, createDocsStore, DOCS_TOOL, DOCS_TOOL_DESCRIPTION, DOCS_TOOL_NAME, DOCS_TOOL_SCHEMA, docsHintOf } from './docs'
 import { drawGitTab, gitTabState, startGitView } from './git'
 import { boardSection, startNotes, summarySection } from './notes'
 import { GIT_EVERY, inputDir, projectStatus, shortHome, startProject } from './project'
@@ -23,7 +24,7 @@ import type { PanelTab, StatusLines } from '../types'
  * Last come the board and the session summary of `./notes`, polled on the same timer.
  * Down the panel's left edge runs a scrollbar for the transcript (`./scrollbar`): click a cell to jump there.
  * Over the cards runs a tab bar (`./tabs`): Panel holds the cards, Git the repository (`./git`),
- * Summary the session summary.
+ * Summary the session summary. The `docs` tool Claude calls keeps the project's docs index (`./docs`).
  *
  * Each part is a card: a round border with its title drawn over the top edge. The first card,
  * Status, is the mod's own: the project's directory, branch and uncommitted changes from
@@ -210,6 +211,8 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
   const pollGit = async () => {
     await gitView?.poll()
   }
+  // The project's docs index, kept by Claude through the docs tool.
+  const docsStore = createDocsStore()
   // A tab shown by a press or /panel: the Git tab reads git at once.
   const onShow = async (tab: PanelTab) => {
     if (tab === 'git') await pollGit()
@@ -219,7 +222,11 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     // The meters drawn under the status line; one that fails leaves the others and the status line be.
     await Promise.allSettled([startContextMeter($), startTokenMeter($), startUsageMeter($, e.isInteractive)])
 
+    // A session whose host takes no tools keeps the rest of the panel.
+    await $.tool.register({ name: DOCS_TOOL_NAME, description: DOCS_TOOL_DESCRIPTION, inputSchema: DOCS_TOOL_SCHEMA }).catch(() => undefined)
+
     const home = await $.env.get('HOME')
+    if (home) Object.assign(docsStore, { home, cwd: e.cwd })
     const id = await $.session.id().catch(() => '')
     if (!home || !id) return next(e)
     homeDir = home
@@ -314,9 +321,17 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     return next(e)
   })
 
-  // A tool call that completed may have changed the repository: the Git tab, while shown, reads git
-  // at once, without holding the call's result. Should this hook fail, the call settles as it would without it.
+  // MCP tools may wait behind ToolSearch, where the model sees the name alone: one line says when to use it.
+  on('classic.SessionStart', async ($, e, next) => {
+    const result = await next(e)
+    return { ...result, additionalContext: [...(result.additionalContext ?? []), docsHintOf(DOCS_TOOL)] }
+  }).catch(($, e, next) => next(e))
+
+  // The docs tool is answered here: a module takes one hook per event. Any other tool call that
+  // completed may have changed the repository: the Git tab, while shown, reads git at once, without
+  // holding the call's result. Should this hook fail, the call settles as it would without it.
   on('tool.call', async ($, e, next) => {
+    if (e.tool === DOCS_TOOL) return { result: await callDocsTool($, docsStore, e as Record<string, unknown>) }
     const result = await next(e)
     if (await isGitTabShown($)) void pollGit()
     return result
