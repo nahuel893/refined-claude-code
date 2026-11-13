@@ -35,6 +35,10 @@ export function world(on: On, git: GitAnswer[] = []) {
   const clock = mock.clock(on, { now: 0 })
   const files = new Map<string, { text: string; mtimeMs: number }>()
   const gitRuns: string[][] = []
+  // Every path stat'ed or read, in order.
+  const reads: string[] = []
+  // The slash commands registered, with what the typeahead says of them.
+  const commands: { name: string; description: string }[] = []
   const opened: { id: string; focus?: true }[] = []
   const closed: string[] = []
   const open = new Set<string>()
@@ -43,10 +47,12 @@ export function world(on: On, git: GitAnswer[] = []) {
   on('env.get', () => ({ value: HOME }))
   on('session.id', () => ({ value: 'session-1' }))
   on('fs.stat', ($, e) => {
+    reads.push(e.path)
     const file = files.get(e.path)
     return file ? { value: { mtimeMs: file.mtimeMs } as never } : { deny: `ENOENT: ${e.path}` }
   })
   on('fs.read', ($, e) => {
+    reads.push(e.path)
     const file = files.get(e.path)
     return file ? { value: file.text } : { deny: `ENOENT: ${e.path}` }
   })
@@ -70,7 +76,10 @@ export function world(on: On, git: GitAnswer[] = []) {
   })
   // The panes open now, each shown: what the opens and closes so far leave.
   on('ui.panes', () => ({ value: [...open].map(id => ({ id, title: id, isShown: true, isFocused: false, isPlaced: true })) }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('command.register', ($, e) => {
+    commands.push({ name: e.name, description: e.description })
+    return { value: { command: e.name } }
+  })
   on('store.get', () => ({ value: undefined }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [] } }))
@@ -79,6 +88,8 @@ export function world(on: On, git: GitAnswer[] = []) {
     clock,
     state,
     gitRuns,
+    reads,
+    commands,
     opened,
     closed,
     write: (path: string, text: string) => files.set(path, { text, mtimeMs: ++writes }),

@@ -1,13 +1,22 @@
-import type { EngineInterface } from 'claude-code'
-import type { DocEntry, DocsIndex } from '../types'
+import { atom, read, update } from 'claude-code'
+import type { Elements, EngineInterface } from 'claude-code'
+import type { Card } from './git'
+import { coalesce } from './project'
+import type { Theme } from './theme'
+import type { DocEntry, DocsIndex, DocsView } from '../types'
 
 /**
  * The project's docs index: the reference documents (architecture, design, notes, ODD files)
  * Claude keeps listed through the `docs` tool, for the status panel's Docs tab. The index belongs
  * to the project, not the session: it lives in `docs.json` beside the project's session folders,
  * so every session in the project sees the same list and nothing is written into the repository.
- * Paths are kept relative to the project's directory. The tool writes the index file alone: no
- * document is ever written, moved or deleted.
+ * Paths are kept relative to the project's directory. The tool writes the index file alone, and
+ * the Docs tab only reads: no document is ever written, moved or deleted.
+ *
+ * The Docs tab draws the index grouped as the Git tab draws its Status, each document whose file is
+ * gone dim and marked `missing`; a document pressed (a click, or Enter on it while the panel has
+ * the keys) shows its text under the list, cut to the rows the pane has. It reads the index and the
+ * files only while it is shown.
  */
 const PROJECTS = '.cache/refined-claude-code/projects'
 
@@ -194,4 +203,154 @@ export async function callDocsTool($: EngineInterface, store: DocsStore, input: 
     () => undefined,
   )
   return applied
+}
+
+/** Document rows kept, at most; the pane shows fewer. */
+const DOC_ROWS = 1000
+
+const view = atom({ plugin: 'openskin', key: 'docsView' } as const, null as DocsView | null)
+const picked = atom({ plugin: 'openskin', key: 'docsPick' } as const, null as string | null)
+
+/**
+ * A document's text as the rows the tab shows: carriage returns and control characters gone, a tab
+ * as two spaces, trailing blank rows dropped, at most DOC_ROWS.
+ */
+export const documentRows = (text: string) => {
+  const rows = text
+    .replace(/\r/g, '')
+    .split('\n')
+    .map(row => row.replace(/\t/g, '  ').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, ''))
+  while (rows.length && !rows[rows.length - 1]!.trim()) rows.pop()
+
+  return rows.slice(0, DOC_ROWS)
+}
+
+/**
+ * At `session.start`: the Docs tab's poll, coalesced as the Git tab's is. It reads the project's
+ * index, stats each document to know which are missing, and reads the picked one again only when
+ * its mtime moved. The view is written only when it changed; a pick no longer in the index is dropped.
+ */
+export function startDocsView($: EngineInterface, home: string, cwd: string) {
+  let seen = ''
+  // The picked document as last read, kept while its mtime holds.
+  let file: { path: string; mtimeMs: number; rows: string[] | null } | null = null
+
+  return coalesce(async () => {
+    const index = await readDocsIndex($, home, cwd)
+    const mtimes = await Promise.all(
+      index.docs.map(doc => $.fs.stat(`${cwd}/${doc.path}`).then(
+        stat => stat.mtimeMs,
+        () => null,
+      )),
+    )
+    let pick = await read($, picked)
+    const at = index.docs.findIndex(doc => doc.path === pick)
+    if (pick !== null && at === -1) {
+      await update($, picked, () => null)
+      pick = null
+    }
+
+    let shown: DocsView['file'] = null
+    if (pick !== null) {
+      const mtimeMs = mtimes[at] ?? null
+      if (mtimeMs === null) file = null
+      else if (file?.path !== pick || file.mtimeMs !== mtimeMs) {
+        const rows = await $.fs.read(`${cwd}/${pick}`).then(documentRows, () => null)
+        file = { path: pick, mtimeMs, rows }
+      }
+      shown = { path: pick, rows: file?.rows ?? null }
+    }
+
+    const next: DocsView = {
+      groups: index.groups.map(name => ({
+        name,
+        docs: index.docs.flatMap((doc, i) => (doc.group === name ? [{ path: doc.path, isMissing: mtimes[i] === null }] : [])),
+      })),
+      file: shown,
+    }
+    const text = JSON.stringify(next)
+    if (text !== seen) {
+      seen = text
+      await update($, view, () => next)
+    }
+  })
+}
+
+/** Picks the document at `path` to show it, or drops the pick when it is the one picked. */
+export async function pickDoc($: EngineInterface, path: string): Promise<void> {
+  await update($, picked, current => (current === path ? null : path))
+}
+
+/** The Docs tab's view and pick as the panel draws them; the view null before the index was first read. */
+export async function docsTabState($: EngineInterface) {
+  const [current, pick] = await Promise.all([read($, view), read($, picked)])
+
+  return { view: current, pick }
+}
+
+export type DocsTabUi = Pick<Elements['terminal'], 'Box' | 'Button' | 'Text'>
+
+/**
+ * The Docs tab: the list card, one muted heading per group and a row per document, then the picked
+ * document in the rows left of `rows` (the pane's body, less the tab bar's one), with at least two.
+ * `onPick` reads the index and the document again.
+ */
+export function drawDocsTab(
+  { Button, Text }: DocsTabUi,
+  $: EngineInterface,
+  theme: Theme,
+  state: { view: DocsView | null; pick: string | null },
+  rows: number,
+  card: Card,
+  onPick: () => Promise<void>,
+): JSX.Element[] {
+  const { view: current, pick } = state
+  if (!current) return [<Text dimColor>Reading the docs index…</Text>]
+  if (current.groups.length === 0) return [<Text dimColor>No documents yet: Claude adds them with the docs tool.</Text>]
+
+  const list: JSX.Element[] = []
+  for (const group of current.groups) {
+    list.push(<Text color={theme.muted}>{group.name}</Text>)
+    for (const doc of group.docs) {
+      const isPicked = doc.path === pick
+      list.push(
+        <Button
+          key={`doc:${doc.path}`}
+          plain
+          onPress={async () => {
+            await pickDoc($, doc.path)
+            await onPick()
+          }}
+        >
+          <Text wrap="truncate-end" {...(doc.isMissing ? { dimColor: true } : {})}>
+            <Text {...(isPicked ? { bold: true, color: theme.accent } : {})}>{doc.path}</Text>
+            {doc.isMissing ? ' missing' : ''}
+          </Text>
+        </Button>,
+      )
+    }
+  }
+
+  const cards = [card('§ Docs', list)]
+  if (pick === null) return cards
+
+  // The list's card is its rows and its border's two.
+  const room = Math.max(2, rows - (list.length + 2) - 2)
+  const isMissing = current.groups.some(group => group.docs.some(doc => doc.path === pick && doc.isMissing))
+  const file = current.file
+  let body: JSX.Element[]
+  if (isMissing) body = [<Text dimColor>{`Missing: ${pick} is not there.`}</Text>]
+  else if (file?.path !== pick) body = [<Text dimColor>Reading the document…</Text>]
+  else if (file.rows === null) body = [<Text dimColor>{`Cannot read ${pick}.`}</Text>]
+  else if (file.rows.length === 0) body = [<Text dimColor>Empty document</Text>]
+  else {
+    const shown = file.rows.length <= room ? file.rows : file.rows.slice(0, room - 1)
+    body = shown.map(row => (
+      <Text wrap="truncate-end" {...(row.startsWith('#') ? { color: theme.accent } : {})}>
+        {row || ' '}
+      </Text>
+    ))
+    if (shown.length < file.rows.length) body.push(<Text dimColor>{`… ${file.rows.length - shown.length} more lines`}</Text>)
+  }
+  return [...cards, card(`▸ ${pick}`, body)]
 }

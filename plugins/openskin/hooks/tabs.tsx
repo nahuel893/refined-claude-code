@@ -3,8 +3,8 @@ import type { Elements, EngineInterface } from 'claude-code'
 import type { PanelTab } from '../types'
 
 /**
- * The status panel's tabs: Panel (the cards), Git (the repository at a glance) and Summary (the
- * session summary). The tab shown is kept in `$.state`, so a press or `/panel <tab>` redraws the
+ * The status panel's tabs: Panel (the cards), Git (the repository at a glance), Summary (the
+ * session summary) and Docs (the project's reference documents). The tab shown is kept in `$.state`, so a press or `/panel <tab>` redraws the
  * panel. A tab's letter presses it while the panel holds the keys (ctrl+x tab, or a click), the
  * engine's rule for a Button's `hotkey`.
  */
@@ -12,6 +12,7 @@ export const TABS: readonly { id: PanelTab; label: string; hotkey: string }[] = 
   { id: 'panel', label: 'Panel', hotkey: 'p' },
   { id: 'git', label: 'Git', hotkey: 'g' },
   { id: 'summary', label: 'Summary', hotkey: 's' },
+  { id: 'docs', label: 'Docs', hotkey: 'd' },
 ]
 
 const shown = atom({ plugin: 'openskin', key: 'tab' } as const, 'panel' as PanelTab)

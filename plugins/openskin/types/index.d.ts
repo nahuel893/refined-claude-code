@@ -32,8 +32,8 @@ export type Fill = { value: number; isEstimate: boolean; tokens?: number; window
 /** One rate-limit window of the subscription, as the last API response reported it. */
 export type Limit = { kind: string; percentUsed: number; resetsAt?: string }
 
-/** The status panel's tab shown: the cards, the Git view or the session summary. */
-export type PanelTab = 'panel' | 'git' | 'summary'
+/** The status panel's tab shown: the cards, the Git view, the session summary or the project's docs. */
+export type PanelTab = 'panel' | 'git' | 'summary' | 'docs'
 
 /** Where a file of the Git tab stands: staged in the index, changed in the work tree, or untracked. */
 export type GitGroup = 'staged' | 'unstaged' | 'untracked'
@@ -74,6 +74,16 @@ export type DocEntry = { path: string; group: string }
  */
 export type DocsIndex = { groups: string[]; docs: DocEntry[] }
 
+/**
+ * What the Docs tab draws: the index's groups in order, each document with whether its file is
+ * missing, and the picked document's rows (null when it is missing or cannot be read), when one is
+ * picked.
+ */
+export type DocsView = {
+  groups: { name: string; docs: { path: string; isMissing: boolean }[] }[]
+  file: { path: string; rows: string[] | null } | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
     openskin: {
@@ -90,6 +100,8 @@ declare module 'claude-code' {
       tab: PanelTab
       gitView: GitView | null
       gitPick: GitPick | null
+      docsView: DocsView | null
+      docsPick: string | null
     }
   }
 }

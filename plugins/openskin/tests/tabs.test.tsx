@@ -3,18 +3,18 @@ import { BOARD, pane, press, startSession, SUMMARY, texts, typed, world } from '
 
 const SUMMARY_TEXT = 'The goal was a parser for the config files.\n\nIt is written and tested; the docs come next.\n'
 
-test('the panel opens on a tab bar of three plain Buttons, Panel shown, each with its letter', async ($, on) => {
+test('the panel opens on a tab bar of four plain Buttons, Panel shown, each with its letter', async ($, on) => {
   const { clock } = world(on)
   await startSession($, clock)
 
   const ui = await $.ui.mount(pane())
   const buttons = (await ui.findAll({ type: 'Button' })).filter(button => String(button.props.key).startsWith('tab:'))
-  expect(buttons.map(button => button.props.key)).toEqual(['tab:panel', 'tab:git', 'tab:summary'])
-  expect(buttons.map(button => button.props.label)).toEqual(['Panel', 'Git', 'Summary'])
-  expect(buttons.map(button => button.props.hotkey)).toEqual(['p', 'g', 's'])
+  expect(buttons.map(button => button.props.key)).toEqual(['tab:panel', 'tab:git', 'tab:summary', 'tab:docs'])
+  expect(buttons.map(button => button.props.label)).toEqual(['Panel', 'Git', 'Summary', 'Docs'])
+  expect(buttons.map(button => button.props.hotkey)).toEqual(['p', 'g', 's', 'd'])
   expect(buttons.every(button => button.props.plain === true)).toBe(true)
   // The shown tab at full strength, the others dim.
-  expect(buttons.map(button => button.props.dimColor === true)).toEqual([false, true, true])
+  expect(buttons.map(button => button.props.dimColor === true)).toEqual([false, true, true, true])
   await ui.unmount()
 })
 
@@ -67,7 +67,7 @@ test('the Summary tab shows the whole summary, every paragraph wrapped, and noth
   expect(all).not.toContain('✿ Status')
   expect(all).not.toContain('Add tests')
   const buttons = (await ui.findAll({ type: 'Button' })).filter(button => String(button.props.key).startsWith('tab:'))
-  expect(buttons.map(button => button.props.dimColor === true)).toEqual([true, true, false])
+  expect(buttons.map(button => button.props.dimColor === true)).toEqual([true, true, false, true])
   await ui.unmount()
 })
 
@@ -112,7 +112,7 @@ test('/panel <tab> shows that tab and opens the panel with the keys once the com
   await startSession($, clock)
 
   const { text } = await $.command.run(typed(' Summary '))
-  expect(text).toBe('Status panel opened on Summary: p, g and s switch tabs while it has the keys.')
+  expect(text).toBe('Status panel opened on Summary: p, g, s and d switch tabs while it has the keys.')
   // Focus asked inside the command is refused (the composer is busy): the open comes after.
   expect(opened).toEqual([])
   await clock.advance(100)
@@ -137,7 +137,7 @@ test('/panel with an unknown tab names the tabs and opens nothing', async ($, on
   await startSession($, clock)
 
   const { text } = await $.command.run(typed('logs'))
-  expect(text).toBe('No tab "logs": /panel opens the panel, /panel panel, /panel git or /panel summary opens it on that tab.')
+  expect(text).toBe('No tab "logs": /panel opens the panel, /panel panel, /panel git, /panel summary or /panel docs opens it on that tab.')
   await clock.advance(100)
   expect(opened).toEqual([])
   expect(await texts($)).toContain('✿ Status')

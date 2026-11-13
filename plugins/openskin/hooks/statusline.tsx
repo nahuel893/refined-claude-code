@@ -3,7 +3,18 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import { contextSection, measureContext, readThresholds, startContextMeter, stopContextMeter } from './meters/context'
 import { countTurn, startTokenMeter, tokenSection } from './meters/tokens'
 import { measureUsage, startUsageMeter, stopUsageMeter, usageSection } from './meters/usage'
-import { callDocsTool, createDocsStore, DOCS_TOOL, DOCS_TOOL_DESCRIPTION, DOCS_TOOL_NAME, DOCS_TOOL_SCHEMA, docsHintOf } from './docs'
+import {
+  callDocsTool,
+  createDocsStore,
+  docsHintOf,
+  docsTabState,
+  drawDocsTab,
+  DOCS_TOOL,
+  DOCS_TOOL_DESCRIPTION,
+  DOCS_TOOL_NAME,
+  DOCS_TOOL_SCHEMA,
+  startDocsView,
+} from './docs'
 import { drawGitTab, gitTabState, startGitView } from './git'
 import { boardSection, startNotes, summarySection } from './notes'
 import { GIT_EVERY, inputDir, projectStatus, shortHome, startProject } from './project'
@@ -24,7 +35,8 @@ import type { PanelTab, StatusLines } from '../types'
  * Last come the board and the session summary of `./notes`, polled on the same timer.
  * Down the panel's left edge runs a scrollbar for the transcript (`./scrollbar`): click a cell to jump there.
  * Over the cards runs a tab bar (`./tabs`): Panel holds the cards, Git the repository (`./git`),
- * Summary the session summary. The `docs` tool Claude calls keeps the project's docs index (`./docs`).
+ * Summary the session summary, Docs the project's docs index (`./docs`), which Claude keeps through
+ * the `docs` tool.
  *
  * Each part is a card: a round border with its title drawn over the top edge. The first card,
  * Status, is the mod's own: the project's directory, branch and uncommitted changes from
@@ -37,6 +49,8 @@ const REFRESH_MS = 1500
 const SCROLLBAR_MS = 250
 /** How often the Git tab reads git while it is shown; never while another tab is. */
 const GIT_TAB_MS = 2500
+/** How often the Docs tab reads the index and the open document while it is shown; never while another tab is. */
+const DOCS_TAB_MS = 2500
 const PANE = 'openskin-status'
 /** How long `/panel <tab>` waits after answering before it opens the panel with the keys. */
 const OPEN_DELAY_MS = 100
@@ -211,11 +225,16 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
   const pollGit = async () => {
     await gitView?.poll()
   }
-  // The project's docs index, kept by Claude through the docs tool.
+  // The project's docs index, kept by Claude through the docs tool, and the Docs tab's reader.
   const docsStore = createDocsStore()
-  // A tab shown by a press or /panel: the Git tab reads git at once.
+  let pollDocsView: (() => Promise<void>) | null = null
+  const pollDocs = async () => {
+    await pollDocsView?.()
+  }
+  // A tab shown by a press or /panel: the Git tab reads git at once, the Docs tab the index.
   const onShow = async (tab: PanelTab) => {
     if (tab === 'git') await pollGit()
+    if (tab === 'docs') await pollDocs()
   }
 
   on('session.start', async ($, e, next) => {
@@ -226,7 +245,10 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     await $.tool.register({ name: DOCS_TOOL_NAME, description: DOCS_TOOL_DESCRIPTION, inputSchema: DOCS_TOOL_SCHEMA }).catch(() => undefined)
 
     const home = await $.env.get('HOME')
-    if (home) Object.assign(docsStore, { home, cwd: e.cwd })
+    if (home) {
+      Object.assign(docsStore, { home, cwd: e.cwd })
+      pollDocsView = startDocsView($, home, e.cwd)
+    }
     const id = await $.session.id().catch(() => '')
     if (!home || !id) return next(e)
     homeDir = home
@@ -287,7 +309,11 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     })
     // The Git tab follows the repository while it is shown: edits made anywhere show up within GIT_TAB_MS.
     $.clock.every(GIT_TAB_MS, () => {
-      void isGitTabShown($).then(isShown => (isShown ? pollGit() : undefined))
+      void shownPaneTab($).then(tab => (tab === 'git' ? pollGit() : undefined))
+    })
+    // The Docs tab follows the index and the open document while it is shown.
+    $.clock.every(DOCS_TAB_MS, () => {
+      void shownPaneTab($).then(tab => (tab === 'docs' ? pollDocs() : undefined))
     })
     // The scrollbar follows the transcript's viewport: draw it again whenever the tracker moved.
     let seenVersion = tracker.version
@@ -299,7 +325,7 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
 
     await $.command.register({
       name: 'panel',
-      description: 'Open the status panel beside the transcript; /panel panel, git or summary opens it on that tab',
+      description: 'Open the status panel beside the transcript; /panel panel, git, summary or docs opens it on that tab',
     })
 
     return next(e)
@@ -327,13 +353,14 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     return { ...result, additionalContext: [...(result.additionalContext ?? []), docsHintOf(DOCS_TOOL)] }
   }).catch(($, e, next) => next(e))
 
-  // The docs tool is answered here: a module takes one hook per event. Any other tool call that
-  // completed may have changed the repository: the Git tab, while shown, reads git at once, without
+  // The docs tool is answered here: a module takes one hook per event. A tool call that completed may
+  // have changed the repository, the index or a document: the tab shown reads again at once, without
   // holding the call's result. Should this hook fail, the call settles as it would without it.
   on('tool.call', async ($, e, next) => {
-    if (e.tool === DOCS_TOOL) return { result: await callDocsTool($, docsStore, e as Record<string, unknown>) }
-    const result = await next(e)
-    if (await isGitTabShown($)) void pollGit()
+    const result = e.tool === DOCS_TOOL ? { result: await callDocsTool($, docsStore, e as Record<string, unknown>) } : await next(e)
+    const tab = await shownPaneTab($)
+    if (tab === 'git') void pollGit()
+    if (tab === 'docs') void pollDocs()
     return result
   }).catch(($, e, next) => next(e))
 
@@ -346,7 +373,7 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
 
     const tab = tabNamed(e.args)
     if (tab === null) {
-      return { text: `No tab "${e.args.trim()}": /panel opens the panel, /panel panel, /panel git or /panel summary opens it on that tab.` }
+      return { text: `No tab "${e.args.trim()}": /panel opens the panel, /panel panel, /panel git, /panel summary or /panel docs opens it on that tab.` }
     }
 
     await showTab($, tab)
@@ -358,7 +385,9 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     })
     const label = TABS.find(each => each.id === tab)!.label
 
-    return { text: `Status panel opened on ${label}: p, g and s switch tabs while it has the keys.` }
+    const keys = TABS.map(each => each.hotkey)
+
+    return { text: `Status panel opened on ${label}: ${keys.slice(0, -1).join(', ')} and ${keys.at(-1)} switch tabs while it has the keys.` }
   })
 
   // Only the fullscreen layout docks a pane beside the transcript; elsewhere a pane
@@ -384,20 +413,22 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
 
   // The tab bar, then the tab shown. Panel: the Status card (the project, then the status line's
   // parts, one row each), then a card per section that has something to show, stacked with no
-  // blank row between them. Summary: the session summary's card, or a dim line without one.
+  // blank row between them. Summary: the session summary's card, or a dim line without one. Docs: the
+  // index's list, then the picked document.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     // The body less each card's border and padding on both sides.
     const columns = Math.max(1, e.props.bodyColumns - CARD_CHROME - BAR_WIDTH)
     // After the Status card, in this order: the context window, the tokens, the subscription,
     // the board.
-    const [lines, project, , tab, summary, git, ...drawn] = await Promise.all([
+    const [lines, project, , tab, summary, git, docs, ...drawn] = await Promise.all([
       read($, statusLines),
       projectStatus($),
       read($, scrollbarTick),
       shownTab($),
       summarySection($),
       gitTabState($),
+      docsTabState($),
       contextSection($, thresholds, theme),
       tokenSection($),
       usageSection($, columns, theme),
@@ -470,6 +501,9 @@ export const registerStatusPanel = (on: On, theme: Theme, options: PluginOptions
     } else if (tab === 'git') {
       // The pane's body less the tab bar's row.
       body = drawGitTab({ Box, Button, Text }, $, theme, git, e.props.scroll.bodyRows - 1, homeDir, card, pollGit)
+    } else if (tab === 'docs') {
+      // The pane's body less the tab bar's row.
+      body = drawDocsTab({ Box, Button, Text }, $, theme, docs, e.props.scroll.bodyRows - 1, card, pollDocs)
     } else {
       body = [card('✿ Status', status), ...sections.map(drawSection)]
     }
@@ -502,12 +536,13 @@ async function openFocused($: EngineInterface) {
 
 /**
  * (A function declaration: the engine follows `$` past an import only into one.)
- * Whether the Git tab is on screen: the tab picked, and the panel open and shown. A closed panel,
- * or one fullscreen no longer shows, keeps its tab but reads no git.
+ * The tab on screen: the tab picked while the panel is open and shown, else null. A closed panel,
+ * or one fullscreen no longer shows, keeps its tab but its Git and Docs tabs read nothing.
  */
-async function isGitTabShown($: EngineInterface): Promise<boolean> {
-  if ((await shownTab($)) !== 'git') return false
+async function shownPaneTab($: EngineInterface): Promise<PanelTab | null> {
+  const tab = await shownTab($)
+  if (tab !== 'git' && tab !== 'docs') return null
   const panes = await $.ui.panes().catch(() => [])
 
-  return panes.some(pane => pane.id === PANE && pane.isShown)
+  return panes.some(pane => pane.id === PANE && pane.isShown) ? tab : null
 }
