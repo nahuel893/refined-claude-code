@@ -8,7 +8,7 @@ An OpenCode-style look for the Claude Code terminal transcript, as a Claude Code
 - Shell commands in a reply are framed, so they stand apart from the prose. Each frame has a `[copy]` button on the right end of its top border: a click copies the whole command and the label reads `copied` for a moment (a failed copy shows a toast with the reason).
 - Each turn closes with a footer: `▣ Claude · <model> · <duration>`.
 
-- In fullscreen, a status panel of cards docks beside the transcript: the project's directory, git branch and uncommitted changes with your status line script's output, one row per part; how full the context window is; each turn's tokens; your subscription's 5-hour and weekly windows; then the session's board. Tabs switch it to a read-only Git view (status, branches, the last commits, a file's diff) or to the session's summary.
+- In fullscreen, a status panel of cards docks beside the transcript: the project's directory, git branch and uncommitted changes with your status line script's output, one row per part; how full the context window is; each turn's tokens; your subscription's 5-hour and weekly windows; then the session's board. Tabs switch it to a read-only Git view (status, branches, the last commits, a file's diff), to the session's summary, or to the project's reference documents, which Claude keeps listed through a `docs` tool and you read in the panel.
 - `/skin` switches every color at once between ten presets (Tokyo Night, Catppuccin, Gruvbox, Nord, Rose Pine, Kanagawa, Everforest, One Dark and more), and Claude Code's own theme with them.
 
 Every color is an option, and each part (the OpenCode look, the command frames, the status panel) can be switched off on its own.
@@ -41,7 +41,7 @@ Change them with `/plugin configure openskin@refined-claude-code`. A color is a 
 | --- | --- | --- |
 | `opencodeStyle` | `true` | The OpenCode look: prompt, tool and error blocks, the reply band, the turn footer. |
 | `commandFrames` | `true` | Frames the shell commands in Claude's replies and asks Claude to tag them as shell blocks. |
-| `statusPanel` | `true` | The status panel beside the transcript in fullscreen; `/panel` opens it, `/panel git` on a tab. |
+| `statusPanel` | `true` | The status panel beside the transcript in fullscreen, and the `docs` tool its Docs tab lists; `/panel` opens it, `/panel git` on a tab. |
 | `contextWarnAt` | `50` | The context fill, in percent, from which the panel's ◔ Context section turns yellow (time to `/compact`). |
 | `contextDangerAt` | `75` | The context fill from which it turns the error color (compact now or start a new session). |
 | `accent` | `#f0a6ec` | The bar beside your prompts and the square in the footer. |
@@ -116,7 +116,7 @@ Edits made outside Claude Code, such as a desktop theme script rewriting `~/.cla
 
 ## Status panel
 
-In the fullscreen layout the panel opens by itself beside the transcript (`/panel` opens it anywhere). Its top row is a tab bar: **Panel** (the cards below, shown first), **Git** and **Summary**. Every part of it is a card: a rounded border in the `toolBar` color with the card's title drawn in its top edge, the cards stacked with no blank row between them, labels in the `muted` color and values bold.
+In the fullscreen layout the panel opens by itself beside the transcript (`/panel` opens it anywhere). Its top row is a tab bar: **Panel** (the cards below, shown first), **Git**, **Summary** and **Docs**. Every part of it is a card: a rounded border in the `toolBar` color with the card's title drawn in its top edge, the cards stacked with no blank row between them, labels in the `muted` color and values bold.
 
 ![/panel opening the status panel in a window under 144 columns](../../assets/features/panel.jpg)
 
@@ -133,7 +133,7 @@ The board needs the [board](../board) mod and the Summary tab the [summarize](..
 
 ### Tabs
 
-Click a tab to show it. Once the panel has the keys (ctrl+x tab, or a click in it) its letter shows it too: `p` Panel, `g` Git, `s` Summary. A square before the tabs tells whether it has them: `■` while it does, `□` while the prompt does. Claude Code hands a pane's letters to it only while it holds the keys, so they do nothing from the prompt. `/panel git` (or `panel`, `summary`) opens the panel on that tab and asks for the keys, so the letters work at once; `/panel` alone opens it as before, on the tab last shown.
+Click a tab to show it. Once the panel has the keys (ctrl+x tab, or a click in it) its letter shows it too: `p` Panel, `g` Git, `s` Summary, `d` Docs. A square before the tabs tells whether it has them: `■` while it does, `□` while the prompt does. Claude Code hands a pane's letters to it only while it holds the keys, so they do nothing from the prompt. `/panel git` (or `panel`, `summary`, `docs`) opens the panel on that tab and asks for the keys, so the letters work at once; `/panel` alone opens it as before, on the tab last shown.
 
 - **Summary**: the whole session summary from the [summarize](../summarize) mod (`/summ`), in a **¶ Summary** card wrapped to the panel's width, never cut. With no summary yet the tab says so in one dim line.
 - **Git**: the repository at a glance, read-only. It never stages, commits, checks out or changes anything; every git it runs only reads, without taking git's optional locks.
@@ -143,6 +143,21 @@ Click a tab to show it. Once the panel has the keys (ctrl+x tab, or a click in i
   - **Δ <file>**: click a file (or Tab to it and Enter while the panel has the keys) and its diff shows under the cards from its first hunk, cut to the rows the pane has, with how many lines are left out; click it again to close it.
 
   The Git tab reads git every 2.5 seconds while it is shown, and right after each tool call completes; while another tab is shown it reads none.
+- **Docs**: the project's reference documents (architecture, design, notes, ODD files), as Claude lists them with the `docs` tool. Read-only: the tab never writes, moves or deletes a document.
+  - **§ Docs**: the documents grouped like the Git tab's status, one muted heading per group (`Architecture`, `Design`, `Notes`, `ODD`, or `Docs` for a document added with no group) in the order the groups were first used, then one row per document, its path relative to the project. A document whose file is gone stays listed, dim and marked `missing`. With no documents yet the tab says so in one dim line.
+  - **▸ <path>**: click a document (or Tab to it and Enter while the panel has the keys) and its text shows under the list, cut to the rows the pane has, with how many lines are left out; click it again to close it.
+
+  The Docs tab reads the index and the open document every 2.5 seconds while it is shown, and right after each tool call completes, so the list and the document follow outside changes; while another tab is shown it reads nothing.
+
+#### The docs tool
+
+The index belongs to the project, not the session: every session in the project sees the same list, and it is kept outside the repository, in `~/.cache/refined-claude-code/projects/<project slug>/docs.json`, beside the session folders (for a project in `/home/user/projects/app`, `~/.cache/refined-claude-code/projects/-home-user-projects-app/docs.json`). Claude keeps it through the `docs` tool (`mcp__openskin__docs`), and the session start tells Claude in one line to index the architecture, design, notes and ODD documents it writes or relies on. The tool takes an `action`:
+
+- `add` a `path`, with an optional `group`: adding a path already listed moves it to that group, and a group named in another case joins the one listed.
+- `remove` a `path` from the index; the file itself is left alone.
+- `list` the index.
+
+It answers with the numbered index after each change. Paths are stored relative to the project; a path outside it is refused in one line. The tool writes only the index file, never a document, and calls that come close together are applied one after another, so none is lost. A missing or malformed `docs.json` reads as an empty index. The tool, like the tab, is part of the status panel: with `statusPanel` off it is not offered.
 
 ### Transcript scrollbar
 

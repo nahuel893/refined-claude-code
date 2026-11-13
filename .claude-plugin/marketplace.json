@@ -9,7 +9,7 @@
       "name": "openskin",
       "source": "./plugins/openskin",
       "description": "An OpenCode-style look for the Claude Code transcript, with framed shell commands; every color configurable.",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "category": "productivity"
     },
     {
